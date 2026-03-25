@@ -201,7 +201,7 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
         var unetPooledStates = currentInput?.pooledStates
         var unetGeometryConditioning = currentInput?.geometryConditioning
 
-        let timeSteps: [Int] = scheduler[0].calculateTimesteps(strength: timestepStrength)
+        let timeSteps: [Float] = scheduler[0].calculateTimesteps(strength: timestepStrength)
 
         // Calculate which step to swap to refiner
         let refinerStartStep = Int(Float(timeSteps.count) * config.refinerStart)

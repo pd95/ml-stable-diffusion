@@ -13,10 +13,10 @@ public protocol Scheduler {
     var inferenceStepCount: Int { get }
 
     /// Training diffusion time steps index by inference time step
-    var timeSteps: [Int] { get }
+    var timeSteps: [Float] { get }
 
     /// Training diffusion time steps index by inference time step
-    func calculateTimesteps(strength: Float?) -> [Int]
+    func calculateTimesteps(strength: Float?) -> [Float]
 
     /// Schedule of betas which controls the amount of noise added at each timestep
     var betas: [Float] { get }
@@ -31,7 +31,7 @@ public protocol Scheduler {
     var initNoiseSigma: Float { get }
 
     /// Scale the model input for schedulers that require preconditioning.
-    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Int) -> MLShapedArray<Float32>
+    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Float) -> MLShapedArray<Float32>
 
     /// Add noise to an original sample for image-to-image initialization.
     func addNoise(
@@ -54,7 +54,7 @@ public protocol Scheduler {
     ///   The state holds the current sample and history of model output noise residuals
     func step(
         output: MLShapedArray<Float32>,
-        timeStep t: Int,
+        timeStep t: Float,
         sample s: MLShapedArray<Float32>
     ) -> MLShapedArray<Float32>
 }
@@ -63,7 +63,7 @@ public protocol Scheduler {
 public extension Scheduler {
     var initNoiseSigma: Float { 1 }
 
-    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Int) -> MLShapedArray<Float32> {
+    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Float) -> MLShapedArray<Float32> {
         sample
     }
 }
@@ -103,7 +103,7 @@ public extension Scheduler {
         guard startStep < timeSteps.count else {
             return noise.map { _ in originalSample }
         }
-        let alphaProdt = alphasCumProd[timeSteps[startStep]]
+        let alphaProdt = alphasCumProd[Int(round(timeSteps[startStep]))]
         let betaProdt = 1 - alphaProdt
         let sqrtAlphaProdt = sqrt(alphaProdt)
         let sqrtBetaProdt = sqrt(betaProdt)
@@ -123,7 +123,7 @@ public extension Scheduler {
 
 @available(iOS 16.2, macOS 13.1, *)
 public extension Scheduler {
-    func calculateTimesteps(strength: Float?) -> [Int] {
+    func calculateTimesteps(strength: Float?) -> [Float] {
         guard let strength else { return timeSteps }
         let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
         guard startStep < timeSteps.count else { return [] }
@@ -158,7 +158,7 @@ public final class PNDMScheduler: Scheduler {
     public let betas: [Float]
     public let alphas: [Float]
     public let alphasCumProd: [Float]
-    public let timeSteps: [Int]
+    public let timeSteps: [Float]
 
     public let alpha_t: [Float]
     public let sigma_t: [Float]
@@ -205,14 +205,14 @@ public final class PNDMScheduler: Scheduler {
         let stepsOffset = 1 // For stable diffusion
         let stepRatio = Float(trainStepCount / stepCount )
         let forwardSteps = (0..<stepCount).map {
-            Int((Float($0) * stepRatio).rounded()) + stepsOffset
+            Float(Int((Float($0) * stepRatio).rounded()) + stepsOffset)
         }
 
         self.alpha_t = vForce.sqrt(self.alphasCumProd)
         self.sigma_t = vForce.sqrt(vDSP.subtract([Float](repeating: 1, count: self.alphasCumProd.count), self.alphasCumProd))
         self.lambda_t = zip(self.alpha_t, self.sigma_t).map { α, σ in log(α) - log(σ) }
 
-        var timeSteps: [Int] = []
+        var timeSteps: [Float] = []
         timeSteps.append(contentsOf: forwardSteps.dropLast(1))
         timeSteps.append(timeSteps.last!)
         timeSteps.append(forwardSteps.last!)
@@ -235,11 +235,10 @@ public final class PNDMScheduler: Scheduler {
     ///   The state holds the current sample and history of model output noise residuals
     public func step(
         output: MLShapedArray<Float32>,
-        timeStep t: Int,
+        timeStep t: Float,
         sample s: MLShapedArray<Float32>
     ) -> MLShapedArray<Float32> {
-        
-        var timeStep = t
+        var timeStep = Int(round(t))
         let stepInc = (trainStepCount / inferenceStepCount)
         var prevStep = timeStep - stepInc
         var modelOutput = output

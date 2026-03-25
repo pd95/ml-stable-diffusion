@@ -89,7 +89,7 @@ public struct Unet: ResourceManaging {
     /// - Returns: Array of predicted noise residuals
     func predictNoise(
         latents: [MLShapedArray<Float32>],
-        timeStep: Int,
+        timeStep: Float,
         hiddenStates: MLShapedArray<Float32>,
         additionalResiduals: [[String: MLShapedArray<Float32>]]? = nil
     ) throws -> [MLShapedArray<Float32>] {
@@ -97,9 +97,9 @@ public struct Unet: ResourceManaging {
         // Match time step batch dimension to the model / latent samples
         let t: MLShapedArray<Float32>
         if hiddenStates.shape[0] == 2 {
-            t = MLShapedArray(scalars: [Float(timeStep), Float(timeStep)], shape: [2])
+            t = MLShapedArray(scalars: [timeStep, timeStep], shape: [2])
         } else {
-            t = MLShapedArray(scalars: [Float(timeStep)], shape: [1])
+            t = MLShapedArray(scalars: [timeStep], shape: [1])
         }
 
         // Form batch input to model
@@ -155,14 +155,14 @@ public struct Unet: ResourceManaging {
     @available(iOS 17.0, macOS 14.0, *)
     func predictNoise(
         latents: [MLShapedArray<Float32>],
-        timeStep: Int,
+        timeStep: Float,
         hiddenStates: MLShapedArray<Float32>,
         pooledStates: MLShapedArray<Float32>,
         geometryConditioning: MLShapedArray<Float32>
     ) throws -> [MLShapedArray<Float32>] {
 
         // Match time step batch dimension to the model / latent samples
-        let t = MLShapedArray<Float32>(scalars:[Float(timeStep), Float(timeStep)],shape:[2])
+        let t = MLShapedArray<Float32>(scalars:[timeStep, timeStep],shape:[2])
 
         // Form batch input to model
         let inputs = try latents.enumerated().map {

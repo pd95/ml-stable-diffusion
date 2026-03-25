@@ -63,12 +63,12 @@ public struct ControlNet: ResourceManaging {
     /// - Returns: Array of predicted noise residuals
     func execute(
         latents: [MLShapedArray<Float32>],
-        timeStep: Int,
+        timeStep: Float,
         hiddenStates: MLShapedArray<Float32>,
         images: [MLShapedArray<Float32>]
     ) throws -> [[String: MLShapedArray<Float32>]] {
         // Match time step batch dimension to the model / latent samples
-        let t = MLShapedArray(scalars: [Float(timeStep), Float(timeStep)], shape: [2])
+        let t = MLShapedArray(scalars: [timeStep, timeStep], shape: [2])
         
         var outputs: [[String: MLShapedArray<Float32>]] = []
         

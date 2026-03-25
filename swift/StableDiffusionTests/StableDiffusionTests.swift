@@ -64,7 +64,11 @@ final class StableDiffusionTests: XCTestCase {
     func testEulerDiscreteSchedulerTimestepsAndScaling() {
         let scheduler = EulerDiscreteScheduler(stepCount: 4, trainStepCount: 10)
 
-        XCTAssertEqual(scheduler.timeSteps, [9, 6, 3, 0])
+        let expectedTimesteps: [Float] = [9, 6, 3, 0]
+        XCTAssertEqual(scheduler.timeSteps.count, expectedTimesteps.count)
+        for (actual, expected) in zip(scheduler.timeSteps, expectedTimesteps) {
+            XCTAssertEqual(actual, expected, accuracy: 1e-6)
+        }
 
         let sample = MLShapedArray<Float32>(scalars: [Float32(1), Float32(-2)], shape: [2])
         let scaled = scheduler.scaleModelInput(sample: sample, timeStep: 9)
@@ -84,7 +88,7 @@ final class StableDiffusionTests: XCTestCase {
 
         let sigma = scheduler.initNoiseSigma
         let nextSigma = scheduler.timeSteps.count > 1
-            ? sqrt((1 - scheduler.alphasCumProd[scheduler.timeSteps[1]]) / scheduler.alphasCumProd[scheduler.timeSteps[1]])
+            ? sqrt((1 - scheduler.alphasCumProd[Int(round(scheduler.timeSteps[1]))]) / scheduler.alphasCumProd[Int(round(scheduler.timeSteps[1]))])
             : 0
         let expectedDenoised = sample.scalars[0] - sigma * output.scalars[0]
         let expectedNext = sample.scalars[0] + (nextSigma - sigma) * output.scalars[0]
@@ -106,5 +110,20 @@ final class StableDiffusionTests: XCTestCase {
         let expected = original.scalars[0] + scheduler.initNoiseSigma * noise.scalars[0]
         XCTAssertEqual(noisy.count, 1)
         XCTAssertEqual(noisy[0].scalars[0], expected, accuracy: 1e-6)
+    }
+
+    func testEulerDiscreteSchedulerSupportsFractionalTimesteps() {
+        let scheduler = EulerDiscreteScheduler(stepCount: 3, trainStepCount: 10)
+        let sample = MLShapedArray<Float32>(scalars: [Float32(4)], shape: [1])
+
+        XCTAssertEqual(scheduler.timeSteps[1], 4.5, accuracy: 1e-6)
+
+        let scaled = scheduler.scaleModelInput(sample: sample, timeStep: 4.5)
+
+        let lowerSigma = sqrt((1 - scheduler.alphasCumProd[4]) / scheduler.alphasCumProd[4])
+        let upperSigma = sqrt((1 - scheduler.alphasCumProd[5]) / scheduler.alphasCumProd[5])
+        let sigma = lowerSigma + (upperSigma - lowerSigma) * 0.5
+        let expectedScale = 1.0 / sqrt(sigma * sigma + 1.0)
+        XCTAssertEqual(scaled.scalars[0], sample.scalars[0] * expectedScale, accuracy: 1e-6)
     }
 }

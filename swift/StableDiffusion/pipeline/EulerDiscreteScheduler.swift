@@ -16,7 +16,7 @@ public final class EulerDiscreteScheduler: Scheduler {
     public let betas: [Float]
     public let alphas: [Float]
     public let alphasCumProd: [Float]
-    public let timeSteps: [Int]
+    public let timeSteps: [Float]
 
     private let sigmas: [Float]
 
@@ -49,22 +49,21 @@ public final class EulerDiscreteScheduler: Scheduler {
         self.alphasCumProd = alphasCumProd
 
         if stepCount == 1 {
-            self.timeSteps = [trainStepCount - 1]
+            self.timeSteps = [Float(trainStepCount - 1)]
         } else {
             self.timeSteps = linspace(0, Float(trainStepCount - 1), stepCount)
                 .reversed()
-                .map { Int(round($0)) }
         }
 
-        self.sigmas = timeSteps.map { Self.sigma(from: alphasCumProd[$0]) } + [0]
+        self.sigmas = timeSteps.map { Self.interpolatedSigma(for: $0, alphasCumProd: alphasCumProd) } + [0]
     }
 
     public var initNoiseSigma: Float {
         sigmas.first ?? 1
     }
 
-    public func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Int) -> MLShapedArray<Float32> {
-        let sigma = Self.sigma(from: alphasCumProd[min(max(t, 0), alphasCumProd.count - 1)])
+    public func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Float) -> MLShapedArray<Float32> {
+        let sigma = Self.interpolatedSigma(for: t, alphasCumProd: alphasCumProd)
         let scale = 1.0 / sqrt(sigma * sigma + 1.0)
         return MLShapedArray(unsafeUninitializedShape: sample.shape) { scalars, _ in
             sample.withUnsafeShapedBufferPointer { buffer, _, _ in
@@ -93,11 +92,10 @@ public final class EulerDiscreteScheduler: Scheduler {
 
     public func step(
         output: MLShapedArray<Float32>,
-        timeStep t: Int,
+        timeStep t: Float,
         sample s: MLShapedArray<Float32>
     ) -> MLShapedArray<Float32> {
-        _ = t
-        let stepIndex = min(counter, timeSteps.count - 1)
+        let stepIndex = timeSteps.firstIndex(of: t) ?? min(counter, timeSteps.count - 1)
         let sigma = sigmas[stepIndex]
         let prevSigma = sigmas[min(stepIndex + 1, sigmas.count - 1)]
         let dt = prevSigma - sigma
@@ -120,5 +118,15 @@ public final class EulerDiscreteScheduler: Scheduler {
 private extension EulerDiscreteScheduler {
     static func sigma(from alphaCumProd: Float) -> Float {
         sqrt((1 - alphaCumProd) / alphaCumProd)
+    }
+
+    static func interpolatedSigma(for timestep: Float, alphasCumProd: [Float]) -> Float {
+        let clipped = min(max(timestep, 0), Float(alphasCumProd.count - 1))
+        let lowerIndex = Int(floor(clipped))
+        let upperIndex = min(lowerIndex + 1, alphasCumProd.count - 1)
+        let lowerSigma = sigma(from: alphasCumProd[lowerIndex])
+        let upperSigma = sigma(from: alphasCumProd[upperIndex])
+        let fraction = clipped - Float(lowerIndex)
+        return lowerSigma + (upperSigma - lowerSigma) * fraction
     }
 }

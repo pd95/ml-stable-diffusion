@@ -262,7 +262,7 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
         }
 
         // De-noising loop
-        let timeSteps: [Int] = scheduler[0].calculateTimesteps(strength: timestepStrength)
+        let timeSteps: [Float] = scheduler[0].calculateTimesteps(strength: timestepStrength)
         for (step,t) in timeSteps.enumerated() {
 
             // Expand the latents for classifier-free guidance

@@ -3,10 +3,45 @@
 
 import XCTest
 import CoreML
+import Foundation
 @testable import StableDiffusion
 
 @available(iOS 16.2, macOS 13.1, *)
 final class StableDiffusionTests: XCTestCase {
+
+    struct EulerReferenceFixture: Decodable {
+        struct Case: Decodable {
+            let timesteps: [Float]
+            let sigmas: [Float]
+            let scale_model_input: TensorCase?
+            let add_noise_full: TensorCase?
+            let add_noise_strength_half: TensorCase?
+            let step_first: StepCase?
+            let scale_model_input_fractional: TensorCase?
+            let add_noise_fractional: TensorCase?
+            let step_fractional: StepCase?
+        }
+
+        struct TensorCase: Decodable {
+            let sample: [Float]?
+            let original: [Float]?
+            let noise: [Float]?
+            let timeStep: Float
+            let result: [Float]
+        }
+
+        struct StepCase: Decodable {
+            let sample: [Float]
+            let output: [Float]
+            let timeStep: Float
+            let prevSample: [Float]
+            let predOriginalSample: [Float]
+        }
+
+        let diffusersVersion: String
+        let stepCount4: Case
+        let stepCount3: Case
+    }
 
     var vocabFileInBundleURL: URL {
         let fileName = "vocab"
@@ -22,6 +57,17 @@ final class StableDiffusionTests: XCTestCase {
             fatalError("BPE tokenizer merges file is missing from bundle")
         }
         return url
+    }
+
+    var eulerReferenceFixture: EulerReferenceFixture {
+        guard let url = Bundle.module.url(forResource: "euler_reference", withExtension: "json") else {
+            fatalError("Euler reference fixture is missing from bundle")
+        }
+        do {
+            return try JSONDecoder().decode(EulerReferenceFixture.self, from: Data(contentsOf: url))
+        } catch {
+            fatalError("Failed to decode Euler reference fixture: \(error)")
+        }
     }
 
     func testBPETokenizer() throws {
@@ -125,5 +171,102 @@ final class StableDiffusionTests: XCTestCase {
         let sigma = lowerSigma + (upperSigma - lowerSigma) * 0.5
         let expectedScale = 1.0 / sqrt(sigma * sigma + 1.0)
         XCTAssertEqual(scaled.scalars[0], sample.scalars[0] * expectedScale, accuracy: 1e-6)
+    }
+
+    func testEulerDiscreteSchedulerImageToImageStrengthUsesMatchingStartStep() {
+        let scheduler = EulerDiscreteScheduler(stepCount: 4, trainStepCount: 10)
+        let strength: Float = 0.5
+        let original = MLShapedArray<Float32>(scalars: [Float32(3)], shape: [1])
+        let noise = MLShapedArray<Float32>(scalars: [Float32(2)], shape: [1])
+
+        let timesteps = scheduler.calculateTimesteps(strength: strength)
+        XCTAssertEqual(timesteps.count, 2)
+        XCTAssertEqual(timesteps.first ?? -1, 3, accuracy: 1e-6)
+
+        let noisy = scheduler.addNoise(originalSample: original, noise: [noise], strength: strength)
+
+        let timestep = timesteps[0]
+        let lowerSigma = sqrt((1 - scheduler.alphasCumProd[3]) / scheduler.alphasCumProd[3])
+        let upperSigma = sqrt((1 - scheduler.alphasCumProd[4]) / scheduler.alphasCumProd[4])
+        let sigma = lowerSigma + (upperSigma - lowerSigma) * (timestep - 3)
+        let expected = original.scalars[0] + sigma * noise.scalars[0]
+        XCTAssertEqual(noisy[0].scalars[0], expected, accuracy: 1e-6)
+    }
+
+    func testEulerDiscreteSchedulerMatchesDiffusersReferenceFixture() {
+        let fixture = eulerReferenceFixture
+        XCTAssertEqual(fixture.diffusersVersion, "0.37.1")
+
+        let scheduler4 = EulerDiscreteScheduler(stepCount: 4, trainStepCount: 10)
+        assertEqualFloatValues(scheduler4.timeSteps, fixture.stepCount4.timesteps)
+        assertEqualShapedArrayScalars(scheduler4.scaleModelInput(
+            sample: shapedArray(fixture.stepCount4.scale_model_input!.sample!),
+            timeStep: fixture.stepCount4.scale_model_input!.timeStep
+        ).scalars, fixture.stepCount4.scale_model_input!.result)
+        assertEqualShapedArrayScalars(
+            scheduler4.addNoise(
+                originalSample: shapedArray(fixture.stepCount4.add_noise_full!.original!),
+                noise: [shapedArray(fixture.stepCount4.add_noise_full!.noise!)],
+                strength: 1.0
+            )[0].scalars,
+            fixture.stepCount4.add_noise_full!.result
+        )
+        assertEqualShapedArrayScalars(
+            scheduler4.addNoise(
+                originalSample: shapedArray(fixture.stepCount4.add_noise_strength_half!.original!),
+                noise: [shapedArray(fixture.stepCount4.add_noise_strength_half!.noise!)],
+                strength: 0.5
+            )[0].scalars,
+            fixture.stepCount4.add_noise_strength_half!.result
+        )
+
+        let step4 = scheduler4.step(
+            output: shapedArray(fixture.stepCount4.step_first!.output),
+            timeStep: fixture.stepCount4.step_first!.timeStep,
+            sample: shapedArray(fixture.stepCount4.step_first!.sample)
+        )
+        assertEqualShapedArrayScalars(step4.scalars, fixture.stepCount4.step_first!.prevSample)
+        assertEqualShapedArrayScalars(scheduler4.modelOutputs.last!.scalars, fixture.stepCount4.step_first!.predOriginalSample)
+
+        let scheduler3 = EulerDiscreteScheduler(stepCount: 3, trainStepCount: 10)
+        assertEqualFloatValues(scheduler3.timeSteps, fixture.stepCount3.timesteps)
+        assertEqualShapedArrayScalars(scheduler3.scaleModelInput(
+            sample: shapedArray(fixture.stepCount3.scale_model_input_fractional!.sample!),
+            timeStep: fixture.stepCount3.scale_model_input_fractional!.timeStep
+        ).scalars, fixture.stepCount3.scale_model_input_fractional!.result)
+        assertEqualShapedArrayScalars(
+            scheduler3.addNoise(
+                originalSample: shapedArray(fixture.stepCount3.add_noise_fractional!.original!),
+                noise: [shapedArray(fixture.stepCount3.add_noise_fractional!.noise!)],
+                strength: 2.0 / 3.0
+            )[0].scalars,
+            fixture.stepCount3.add_noise_fractional!.result
+        )
+
+        let step3 = scheduler3.step(
+            output: shapedArray(fixture.stepCount3.step_fractional!.output),
+            timeStep: fixture.stepCount3.step_fractional!.timeStep,
+            sample: shapedArray(fixture.stepCount3.step_fractional!.sample)
+        )
+        assertEqualShapedArrayScalars(step3.scalars, fixture.stepCount3.step_fractional!.prevSample)
+        assertEqualShapedArrayScalars(scheduler3.modelOutputs.last!.scalars, fixture.stepCount3.step_fractional!.predOriginalSample)
+    }
+
+    private func shapedArray(_ scalars: [Float]) -> MLShapedArray<Float32> {
+        MLShapedArray<Float32>(scalars: scalars.map { Float32($0) }, shape: [scalars.count])
+    }
+
+    private func assertEqualShapedArrayScalars(_ actual: [Float32], _ expected: [Float], accuracy: Float = 1e-5, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(actual.count, expected.count, file: file, line: line)
+        for (lhs, rhs) in zip(actual, expected) {
+            XCTAssertEqual(lhs, rhs, accuracy: accuracy, file: file, line: line)
+        }
+    }
+
+    private func assertEqualFloatValues(_ actual: [Float], _ expected: [Float], accuracy: Float = 1e-6, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(actual.count, expected.count, file: file, line: line)
+        for (lhs, rhs) in zip(actual, expected) {
+            XCTAssertEqual(lhs, rhs, accuracy: accuracy, file: file, line: line)
+        }
     }
 }

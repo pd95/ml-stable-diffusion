@@ -39,6 +39,7 @@ let package = Package(
             dependencies: ["StableDiffusion"],
             path: "swift/StableDiffusionTests",
             resources: [
+                .copy("Resources/euler_reference.json"),
                 .copy("Resources/vocab.json"),
                 .copy("Resources/merges.txt")
             ]),

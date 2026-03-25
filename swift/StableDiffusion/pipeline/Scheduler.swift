@@ -70,6 +70,11 @@ public extension Scheduler {
 
 @available(iOS 16.2, macOS 13.1, *)
 public extension Scheduler {
+    func startStep(for strength: Float?) -> Int {
+        guard let strength else { return 0 }
+        return max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+    }
+
     /// Compute weighted sum of shaped arrays of equal shapes
     ///
     /// - Parameters:
@@ -99,7 +104,7 @@ public extension Scheduler {
         noise: [MLShapedArray<Float32>],
         strength: Float
     ) -> [MLShapedArray<Float32>] {
-        let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+        let startStep = startStep(for: strength)
         guard startStep < timeSteps.count else {
             return noise.map { _ in originalSample }
         }
@@ -124,8 +129,8 @@ public extension Scheduler {
 @available(iOS 16.2, macOS 13.1, *)
 public extension Scheduler {
     func calculateTimesteps(strength: Float?) -> [Float] {
-        guard let strength else { return timeSteps }
-        let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+        guard strength != nil else { return timeSteps }
+        let startStep = startStep(for: strength)
         guard startStep < timeSteps.count else { return [] }
         let actualTimesteps = Array(timeSteps[startStep...])
         return actualTimesteps

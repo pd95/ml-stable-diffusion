@@ -33,12 +33,15 @@ Status:
 - `Scheduler`, `Unet`, and `ControlNet` now accept `Float` timesteps where the pipeline uses scheduler-emitted values.
 - `EulerDiscreteScheduler` now preserves fractional timesteps and interpolates sigma values for `scaleModelInput(...)`.
 - Added test coverage for fractional timestep behavior.
+- The image-to-image start-step calculation is now centralized in the scheduler layer so `calculateTimesteps(...)` and Euler `addNoise(...)` use the same index selection.
+- Added explicit test coverage for partial-strength Euler image-to-image initialization.
+- Added a diffusers-backed reference fixture and XCTest parity coverage for Euler timesteps, scale-model-input behavior, add-noise behavior, and representative step outputs.
 - Text-to-image Euler behavior is now closer to diffusers than the original integer-rounded implementation.
 
 Still open:
-- Revisit `addNoise(...)` and timestep/strength behavior for image-to-image parity.
-- Validate scheduler behavior against Python/diffusers reference outputs rather than only smoke tests and math-level tests.
 - Decide whether further sigma/timestep interpolation should be applied in more places for stricter parity.
+- Confirm whether any additional image-to-image begin-index behavior from diffusers should be modeled beyond the shared start-step logic now in place.
+- Expand diffusers-reference coverage beyond the current focused math fixtures if stricter parity is required.
 
 ## Current State
 - The Swift package already supports `PNDMScheduler`, `DPMSolverMultistepScheduler`, and `DiscreteFlowScheduler`.
@@ -46,6 +49,8 @@ Still open:
 - The denoising loops in `StableDiffusionPipeline.swift` and `StableDiffusionXLPipeline.swift` now call `scheduler.scaleModelInput(...)` before UNet execution.
 - The SD and SDXL scheduler path now uses `Float` timesteps end-to-end.
 - The current Euler implementation is validated for text-to-image, but image-to-image parity remains unfinished.
+- The image-to-image path now has aligned start-step logic, but it still lacks direct diffusers-reference validation.
+- The image-to-image path now has aligned start-step logic and focused diffusers-reference validation at the scheduler-math level.
 
 ## Required Changes
 
@@ -97,7 +102,8 @@ Status:
 
 Status:
 - Completed, using the existing `swift/StableDiffusionTests/StableDiffusionTests.swift` file.
-- Current coverage includes timestep generation, input scaling, Euler stepping behavior, add-noise behavior, and fractional timestep handling.
+- Current coverage includes timestep generation, input scaling, Euler stepping behavior, add-noise behavior, fractional timestep handling, and image-to-image start-step alignment.
+- Current coverage also includes a checked-in diffusers parity fixture for representative Euler scheduler operations.
 
 ## Open Design Decision
 The largest design question is timestep type.
@@ -135,5 +141,6 @@ Additional follow-up files likely for remaining parity work:
 - The Phase 1 integration work is complete and validated.
 - The timestep-representation risk turned out to be real; `Float` timesteps were required for the next parity step, and `Unet.swift` plus `ControlNet.swift` became part of that work.
 - The main remaining technical risk is still image-to-image parity, especially `addNoise(...)` behavior and exact strength/timestep handling.
-- Another remaining gap is validation quality: we have build coverage, package tests, and smoke tests, but not diffusers reference-parity tests yet.
+- The remaining image-to-image risk is narrower now: scheduler math is checked against diffusers fixtures, but wider end-to-end parity is still unproven.
+- Validation quality is materially better now because we have direct diffusers-reference tests for Euler scheduler math; the main remaining gap is breadth rather than absence of parity checks.
 - The plan remains sound: the project has moved from “usable Euler integration” into “incremental parity tightening,” with clear next work on image-to-image and reference validation.

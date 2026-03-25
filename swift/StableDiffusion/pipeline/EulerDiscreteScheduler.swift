@@ -6,9 +6,8 @@ import CoreML
 
 /// A pragmatic Euler discrete scheduler for Stable Diffusion.
 ///
-/// This is a phase 1 implementation that follows the current Swift scheduler
-/// architecture and uses integer timesteps. It is intended to be usable first
-/// and tightened against diffusers behavior in a later phase.
+/// The implementation preserves fractional timesteps on the inference path and
+/// uses interpolated sigma values where diffusers-style parity depends on them.
 @available(iOS 16.2, macOS 13.1, *)
 public final class EulerDiscreteScheduler: Scheduler {
     public let trainStepCount: Int
@@ -79,7 +78,7 @@ public final class EulerDiscreteScheduler: Scheduler {
         noise: [MLShapedArray<Float32>],
         strength: Float
     ) -> [MLShapedArray<Float32>] {
-        let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+        let startStep = startStep(for: strength)
         guard startStep < timeSteps.count else {
             return noise.map { _ in originalSample }
         }

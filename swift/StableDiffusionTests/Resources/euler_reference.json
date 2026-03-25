@@ -1,0 +1,117 @@
+{
+  "diffusersVersion": "0.37.1",
+  "stepCount3": {
+    "add_noise_fractional": {
+      "noise": [
+        2.0
+      ],
+      "original": [
+        3.0
+      ],
+      "result": [
+        3.241499185562134
+      ],
+      "timeStep": 4.5
+    },
+    "scale_model_input_fractional": {
+      "result": [
+        3.971153974533081
+      ],
+      "sample": [
+        4.0
+      ],
+      "timeStep": 4.5
+    },
+    "sigmas": [
+      0.2375420778989792,
+      0.12074962258338928,
+      0.029167532920837402,
+      0.0
+    ],
+    "step_fractional": {
+      "output": [
+        2.0
+      ],
+      "predOriginalSample": [
+        9.758501052856445
+      ],
+      "prevSample": [
+        9.8168363571167
+      ],
+      "sample": [
+        10.0
+      ],
+      "timeStep": 4.5
+    },
+    "timesteps": [
+      9.0,
+      4.5,
+      0.0
+    ]
+  },
+  "stepCount4": {
+    "add_noise_full": {
+      "noise": [
+        2.0
+      ],
+      "original": [
+        3.0
+      ],
+      "result": [
+        3.475084066390991
+      ],
+      "timeStep": 9.0
+    },
+    "add_noise_strength_half": {
+      "noise": [
+        2.0
+      ],
+      "original": [
+        3.0
+      ],
+      "result": [
+        3.175271987915039
+      ],
+      "timeStep": 3.0
+    },
+    "scale_model_input": {
+      "result": [
+        0.9729273915290833,
+        -1.9458547830581665
+      ],
+      "sample": [
+        1.0,
+        -2.0
+      ],
+      "timeStep": 9.0
+    },
+    "sigmas": [
+      0.2375420778989792,
+      0.15652213990688324,
+      0.08763595670461655,
+      0.029167532920837402,
+      0.0
+    ],
+    "step_first": {
+      "output": [
+        2.0
+      ],
+      "predOriginalSample": [
+        9.52491569519043
+      ],
+      "prevSample": [
+        9.837960243225098
+      ],
+      "sample": [
+        10.0
+      ],
+      "timeStep": 9.0
+    },
+    "timesteps": [
+      9.0,
+      6.0,
+      3.0,
+      0.0
+    ]
+  }
+}

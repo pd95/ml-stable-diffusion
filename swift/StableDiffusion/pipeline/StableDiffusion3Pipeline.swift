@@ -270,20 +270,24 @@ public struct StableDiffusion3Pipeline: StableDiffusionPipelineProtocol {
         var sampleShape = mmdit.latentImageEmbeddingsShape
         sampleShape[0] = 1
 
-        let stdev = scheduler.initNoiseSigma
         var random = randomSource(from: config.rngType, seed: config.seed)
-        let samples = (0..<config.imageCount).map { _ in
-            MLShapedArray<Float32>(
-                converting: random.normalShapedArray(sampleShape, mean: 0.0, stdev: Double(stdev)))
-        }
         if let image = config.startingImage, config.mode == .imageToImage {
             guard let encoder else {
                 throw PipelineError.startingImageProvidedWithoutEncoder
             }
+            let noise = (0..<config.imageCount).map { _ in
+                MLShapedArray<Float32>(
+                    converting: random.normalShapedArray(sampleShape, mean: 0.0, stdev: 1.0))
+            }
             let latent = try encoder.encode(image, scaleFactor: config.encoderScaleFactor, random: &random)
-            return scheduler.addNoise(originalSample: latent, noise: samples, strength: config.strength)
+            return scheduler.addNoise(originalSample: latent, noise: noise, strength: config.strength)
         }
-        return samples
+
+        let stdev = scheduler.initNoiseSigma
+        return (0..<config.imageCount).map { _ in
+            MLShapedArray<Float32>(
+                converting: random.normalShapedArray(sampleShape, mean: 0.0, stdev: Double(stdev)))
+        }
     }
 
     func performGuidance(_ noise: [MLShapedArray<Float32>], _ guidanceScale: Float) -> [MLShapedArray<Float32>] {

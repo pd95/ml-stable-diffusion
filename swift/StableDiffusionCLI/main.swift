@@ -74,7 +74,7 @@ struct StableDiffusionSample: ParsableCommand {
     @Option(help: "Compute units to load model with {all,cpuOnly,cpuAndGPU,cpuAndNeuralEngine}")
     var computeUnits: ComputeUnits = .all
 
-    @Option(help: "Scheduler to use, one of {pndm, dpmpp, euler}")
+    @Option(help: "Scheduler to use, one of {pndm, dpmpp, euler, euler_a}")
     var scheduler: SchedulerOption = .pndm
 
     @Option(help: "Random number generator to use, one of {numpy, torch, nvidia}")
@@ -137,6 +137,9 @@ struct StableDiffusionSample: ParsableCommand {
                 scaleFactor = 1.5305
                 shiftFactor = 0.0609
                 timestepShift = 3.0
+                if scheduler == .eulerA {
+                    throw RunError.unsupported("Euler ancestral scheduler is not yet supported for Stable Diffusion 3")
+                }
                 if !controlnet.isEmpty {
                     throw RunError.unsupported("ControlNet is not supported for Stable Diffusion 3")
                 }
@@ -311,10 +314,14 @@ struct StableDiffusionSample: ParsableCommand {
 
         name += ".\(seed)"
 
-        if let step = step {
-            name += ".\(step)"
-        } else {
-            name += ".final"
+        name += ".\(scheduler.rawValue)"
+
+        if saveEvery > 0 {
+            if let step = step {
+                name += ".\(step)"
+            } else {
+                name += ".final"
+            }
         }
         name += ".png"
         return name
@@ -346,12 +353,13 @@ enum ComputeUnits: String, ExpressibleByArgument, CaseIterable {
 
 @available(iOS 16.2, macOS 13.1, *)
 enum SchedulerOption: String, ExpressibleByArgument {
-    case pndm, dpmpp, euler
+    case pndm, dpmpp, euler, eulerA = "euler_a"
     var stableDiffusionScheduler: StableDiffusionScheduler {
         switch self {
         case .pndm: return .pndmScheduler
         case .dpmpp: return .dpmSolverMultistepScheduler
         case .euler: return .eulerDiscreteScheduler
+        case .eulerA: return .eulerAncestralDiscreteScheduler
         }
     }
 }

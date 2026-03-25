@@ -10,6 +10,13 @@ Add `EulerAncestralDiscreteScheduler` to evaluate whether ancestral Euler sampli
 
 This is a new feature, not unfinished `EulerDiscreteScheduler` work.
 
+Status:
+- In progress.
+- `EulerAncestralDiscreteScheduler` now exists in the Swift package and is wired into the SD/SDXL scheduler selection path.
+- The scheduler uses the pipeline RNG for ancestral step noise so seeded behavior stays aligned with the repo's existing RNG options.
+- Diffusers-reference fixture coverage is in place for representative ancestral Euler timesteps, input scaling, add-noise behavior, and stochastic step outputs.
+- Package tests and Xcode build validation currently pass.
+
 ## Delivery Phases
 
 ### Phase 1: Text-to-image integration
@@ -24,6 +31,11 @@ Success criteria:
 - Package tests pass in Xcode MCP.
 - macOS smoke testing shows deterministic seeded outputs and usable low-step results.
 
+Status:
+- Partially completed.
+- Implementation, CLI exposure, and automated parity coverage are done.
+- Manual macOS low-step validation is still pending.
+
 ### Phase 2: Image-to-image support
 - Extend ancestral Euler behavior to image-to-image only after text-to-image is stable.
 - Validate that img2img strength/start-step handling works sensibly with ancestral noise injection.
@@ -32,6 +44,10 @@ Success criteria:
 Success criteria:
 - Low-strength img2img preserves source structure.
 - Higher-strength img2img transforms the source without collapsing into raw noise.
+
+Status:
+- Not yet validated.
+- The current implementation reuses the existing img2img initialization path, but this phase is still pending explicit testing.
 
 ## Why This Feature
 - Plain Euler is now correct and usable, but in this project it is not dramatically different from `dpmpp` at moderate step counts.

@@ -57,6 +57,13 @@ public protocol Scheduler {
         timeStep t: Float,
         sample s: MLShapedArray<Float32>
     ) -> MLShapedArray<Float32>
+
+    func step(
+        output: MLShapedArray<Float32>,
+        timeStep t: Float,
+        sample s: MLShapedArray<Float32>,
+        random: inout RandomSource
+    ) -> MLShapedArray<Float32>
 }
 
 @available(iOS 16.2, macOS 13.1, *)
@@ -65,6 +72,15 @@ public extension Scheduler {
 
     func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Float) -> MLShapedArray<Float32> {
         sample
+    }
+
+    func step(
+        output: MLShapedArray<Float32>,
+        timeStep t: Float,
+        sample s: MLShapedArray<Float32>,
+        random: inout RandomSource
+    ) -> MLShapedArray<Float32> {
+        step(output: output, timeStep: t, sample: s)
     }
 }
 

@@ -177,12 +177,14 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
             case .pndmScheduler: return PNDMScheduler(stepCount: config.stepCount)
             case .dpmSolverMultistepScheduler: return DPMSolverMultistepScheduler(stepCount: config.stepCount, timeStepSpacing: config.schedulerTimestepSpacing)
             case .eulerDiscreteScheduler: return EulerDiscreteScheduler(stepCount: config.stepCount)
+            case .eulerAncestralDiscreteScheduler: return EulerAncestralDiscreteScheduler(stepCount: config.stepCount)
             case .discreteFlowScheduler: return DiscreteFlowScheduler(stepCount: config.stepCount, timeStepShift: config.schedulerTimestepShift)
             }
         }
 
+        var random = randomSource(from: config.rngType, seed: config.seed)
         // Generate random latent samples from specified seed
-        var latents: [MLShapedArray<Float32>] = try generateLatentSamples(configuration: config, scheduler: scheduler[0])
+        var latents: [MLShapedArray<Float32>] = try generateLatentSamples(configuration: config, scheduler: scheduler[0], random: &random)
 
         // Store denoised latents from scheduler to pass into decoder
         var denoisedLatents: [MLShapedArray<Float32>] = latents.map { MLShapedArray(converting: $0) }
@@ -253,7 +255,8 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
                 latents[i] = scheduler[i].step(
                     output: noise[i],
                     timeStep: t,
-                    sample: latents[i]
+                    sample: latents[i],
+                    random: &random
                 )
                 
                 denoisedLatents[i] = scheduler[i].modelOutputs.last ?? latents[i]
@@ -367,11 +370,10 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
         return ModelInputs(hiddenStates: hiddenStates, pooledStates: pooledStates, geometryConditioning: geometry)
     }
 
-    func generateLatentSamples(configuration config: Configuration, scheduler: Scheduler) throws -> [MLShapedArray<Float32>] {
+    func generateLatentSamples(configuration config: Configuration, scheduler: Scheduler, random: inout RandomSource) throws -> [MLShapedArray<Float32>] {
         var sampleShape = unet.latentSampleShape
         sampleShape[0] = 1
-        
-        var random = randomSource(from: config.rngType, seed: config.seed)
+
         if let image = config.startingImage, config.mode == .imageToImage {
             guard let encoder else {
                 throw PipelineError.startingImageProvidedWithoutEncoder

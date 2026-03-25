@@ -36,6 +36,7 @@ final class StableDiffusionTests: XCTestCase {
             let timeStep: Float
             let prevSample: [Float]
             let predOriginalSample: [Float]
+            let seed: UInt32?
         }
 
         let diffusersVersion: String
@@ -67,6 +68,17 @@ final class StableDiffusionTests: XCTestCase {
             return try JSONDecoder().decode(EulerReferenceFixture.self, from: Data(contentsOf: url))
         } catch {
             fatalError("Failed to decode Euler reference fixture: \(error)")
+        }
+    }
+
+    var eulerAncestralReferenceFixture: EulerReferenceFixture {
+        guard let url = Bundle.module.url(forResource: "euler_ancestral_reference", withExtension: "json") else {
+            fatalError("Euler ancestral reference fixture is missing from bundle")
+        }
+        do {
+            return try JSONDecoder().decode(EulerReferenceFixture.self, from: Data(contentsOf: url))
+        } catch {
+            fatalError("Failed to decode Euler ancestral reference fixture: \(error)")
         }
     }
 
@@ -247,6 +259,69 @@ final class StableDiffusionTests: XCTestCase {
             output: shapedArray(fixture.stepCount3.step_fractional!.output),
             timeStep: fixture.stepCount3.step_fractional!.timeStep,
             sample: shapedArray(fixture.stepCount3.step_fractional!.sample)
+        )
+        assertEqualShapedArrayScalars(step3.scalars, fixture.stepCount3.step_fractional!.prevSample)
+        assertEqualShapedArrayScalars(scheduler3.modelOutputs.last!.scalars, fixture.stepCount3.step_fractional!.predOriginalSample)
+    }
+
+    func testEulerAncestralDiscreteSchedulerMatchesDiffusersReferenceFixture() {
+        let fixture = eulerAncestralReferenceFixture
+        XCTAssertEqual(fixture.diffusersVersion, "0.37.1")
+
+        let scheduler4 = EulerAncestralDiscreteScheduler(stepCount: 4, trainStepCount: 10)
+        assertEqualFloatValues(scheduler4.timeSteps, fixture.stepCount4.timesteps)
+        assertEqualShapedArrayScalars(scheduler4.scaleModelInput(
+            sample: shapedArray(fixture.stepCount4.scale_model_input!.sample!),
+            timeStep: fixture.stepCount4.scale_model_input!.timeStep
+        ).scalars, fixture.stepCount4.scale_model_input!.result)
+        assertEqualShapedArrayScalars(
+            scheduler4.addNoise(
+                originalSample: shapedArray(fixture.stepCount4.add_noise_full!.original!),
+                noise: [shapedArray(fixture.stepCount4.add_noise_full!.noise!)],
+                strength: 1.0
+            )[0].scalars,
+            fixture.stepCount4.add_noise_full!.result
+        )
+        assertEqualShapedArrayScalars(
+            scheduler4.addNoise(
+                originalSample: shapedArray(fixture.stepCount4.add_noise_strength_half!.original!),
+                noise: [shapedArray(fixture.stepCount4.add_noise_strength_half!.noise!)],
+                strength: 0.5
+            )[0].scalars,
+            fixture.stepCount4.add_noise_strength_half!.result
+        )
+
+        var random4: RandomSource = TorchRandomSource(seed: fixture.stepCount4.step_first!.seed!)
+        let step4 = scheduler4.step(
+            output: shapedArray(fixture.stepCount4.step_first!.output),
+            timeStep: fixture.stepCount4.step_first!.timeStep,
+            sample: shapedArray(fixture.stepCount4.step_first!.sample),
+            random: &random4
+        )
+        assertEqualShapedArrayScalars(step4.scalars, fixture.stepCount4.step_first!.prevSample)
+        assertEqualShapedArrayScalars(scheduler4.modelOutputs.last!.scalars, fixture.stepCount4.step_first!.predOriginalSample)
+
+        let scheduler3 = EulerAncestralDiscreteScheduler(stepCount: 3, trainStepCount: 10)
+        assertEqualFloatValues(scheduler3.timeSteps, fixture.stepCount3.timesteps)
+        assertEqualShapedArrayScalars(scheduler3.scaleModelInput(
+            sample: shapedArray(fixture.stepCount3.scale_model_input_fractional!.sample!),
+            timeStep: fixture.stepCount3.scale_model_input_fractional!.timeStep
+        ).scalars, fixture.stepCount3.scale_model_input_fractional!.result)
+        assertEqualShapedArrayScalars(
+            scheduler3.addNoise(
+                originalSample: shapedArray(fixture.stepCount3.add_noise_fractional!.original!),
+                noise: [shapedArray(fixture.stepCount3.add_noise_fractional!.noise!)],
+                strength: 2.0 / 3.0
+            )[0].scalars,
+            fixture.stepCount3.add_noise_fractional!.result
+        )
+
+        var random3: RandomSource = TorchRandomSource(seed: fixture.stepCount3.step_fractional!.seed!)
+        let step3 = scheduler3.step(
+            output: shapedArray(fixture.stepCount3.step_fractional!.output),
+            timeStep: fixture.stepCount3.step_fractional!.timeStep,
+            sample: shapedArray(fixture.stepCount3.step_fractional!.sample),
+            random: &random3
         )
         assertEqualShapedArrayScalars(step3.scalars, fixture.stepCount3.step_fractional!.prevSample)
         assertEqualShapedArrayScalars(scheduler3.modelOutputs.last!.scalars, fixture.stepCount3.step_fractional!.predOriginalSample)

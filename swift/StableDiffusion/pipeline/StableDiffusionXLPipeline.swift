@@ -176,6 +176,7 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
             switch config.schedulerType {
             case .pndmScheduler: return PNDMScheduler(stepCount: config.stepCount)
             case .dpmSolverMultistepScheduler: return DPMSolverMultistepScheduler(stepCount: config.stepCount, timeStepSpacing: config.schedulerTimestepSpacing)
+            case .eulerDiscreteScheduler: return EulerDiscreteScheduler(stepCount: config.stepCount)
             case .discreteFlowScheduler: return DiscreteFlowScheduler(stepCount: config.stepCount, timeStepShift: config.schedulerTimestepShift)
             }
         }
@@ -213,6 +214,10 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
                 MLShapedArray<Float32>(concatenating: [$0, $0], alongAxis: 0)
             }
 
+            let latentModelInput = zip(scheduler, latentUnetInput).map {
+                $0.0.scaleModelInput(sample: $0.1, timeStep: t)
+            }
+
             // Switch to refiner if specified
             if let refiner = unetRefiner, step == refinerStartStep {
                 unet.unloadResources()
@@ -233,7 +238,7 @@ public struct StableDiffusionXLPipeline: StableDiffusionPipelineProtocol {
             // Predict noise residuals from latent samples
             // and current time step conditioned on hidden states
             var noise = try unetModel.predictNoise(
-                latents: latentUnetInput,
+                latents: latentModelInput,
                 timeStep: t,
                 hiddenStates: hiddenStates,
                 pooledStates: pooledStates,

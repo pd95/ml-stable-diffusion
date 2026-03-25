@@ -30,6 +30,16 @@ public protocol Scheduler {
     /// Standard deviation of the initial noise distribution
     var initNoiseSigma: Float { get }
 
+    /// Scale the model input for schedulers that require preconditioning.
+    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Int) -> MLShapedArray<Float32>
+
+    /// Add noise to an original sample for image-to-image initialization.
+    func addNoise(
+        originalSample: MLShapedArray<Float32>,
+        noise: [MLShapedArray<Float32>],
+        strength: Float
+    ) -> [MLShapedArray<Float32>]
+
     /// Denoised latents
     var modelOutputs: [MLShapedArray<Float32>] { get }
 
@@ -52,6 +62,10 @@ public protocol Scheduler {
 @available(iOS 16.2, macOS 13.1, *)
 public extension Scheduler {
     var initNoiseSigma: Float { 1 }
+
+    func scaleModelInput(sample: MLShapedArray<Float32>, timeStep t: Int) -> MLShapedArray<Float32> {
+        sample
+    }
 }
 
 @available(iOS 16.2, macOS 13.1, *)
@@ -86,6 +100,9 @@ public extension Scheduler {
         strength: Float
     ) -> [MLShapedArray<Float32>] {
         let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+        guard startStep < timeSteps.count else {
+            return noise.map { _ in originalSample }
+        }
         let alphaProdt = alphasCumProd[timeSteps[startStep]]
         let betaProdt = 1 - alphaProdt
         let sqrtAlphaProdt = sqrt(alphaProdt)
@@ -109,6 +126,7 @@ public extension Scheduler {
     func calculateTimesteps(strength: Float?) -> [Int] {
         guard let strength else { return timeSteps }
         let startStep = max(inferenceStepCount - Int(Float(inferenceStepCount) * strength), 0)
+        guard startStep < timeSteps.count else { return [] }
         let actualTimesteps = Array(timeSteps[startStep...])
         return actualTimesteps
     }

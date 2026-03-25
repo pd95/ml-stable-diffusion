@@ -13,6 +13,8 @@ public enum StableDiffusionScheduler {
     case pndmScheduler
     /// Scheduler that uses a second order DPM-Solver++ algorithm
     case dpmSolverMultistepScheduler
+    /// Scheduler that uses Euler discrete updates
+    case eulerDiscreteScheduler
     /// Scheduler for rectified flow based multimodal diffusion transformer models
     case discreteFlowScheduler
 }
@@ -234,6 +236,7 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
             switch config.schedulerType {
             case .pndmScheduler: return PNDMScheduler(stepCount: config.stepCount)
             case .dpmSolverMultistepScheduler: return DPMSolverMultistepScheduler(stepCount: config.stepCount, timeStepSpacing: config.schedulerTimestepSpacing)
+            case .eulerDiscreteScheduler: return EulerDiscreteScheduler(stepCount: config.stepCount)
             case .discreteFlowScheduler: return DiscreteFlowScheduler(stepCount: config.stepCount, timeStepShift: config.schedulerTimestepShift)
             }
         }
@@ -273,9 +276,13 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
                 latentUnetInput = latents
             }
 
+            let latentModelInput = zip(scheduler, latentUnetInput).map {
+                $0.0.scaleModelInput(sample: $0.1, timeStep: t)
+            }
+
             // Before Unet, execute controlNet and add the output into Unet inputs
             let additionalResiduals = try controlNet?.execute(
-                latents: latentUnetInput,
+                latents: latentModelInput,
                 timeStep: t,
                 hiddenStates: hiddenStates,
                 images: controlNetConds
@@ -287,7 +294,7 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
             if unet.latentSampleShape[0] >= 2 || config.guidanceScale < 1.0 {
                 // One predict call from the uNet, using batching if needed
                 noise = try unet.predictNoise(
-                  latents: latentUnetInput,
+                  latents: latentModelInput,
                   timeStep: t,
                   hiddenStates: hiddenStates,
                   additionalResiduals: additionalResiduals
@@ -297,7 +304,7 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
                 var hidden0 = MLShapedArray<Float32>(converting: hiddenStates[0])
                 hidden0 = MLShapedArray(scalars: hidden0.scalars, shape: [1]+hidden0.shape)
                 let noise_pred_uncond = try unet.predictNoise(
-                  latents: latents,
+                  latents: latentModelInput,
                   timeStep: t,
                   hiddenStates: hidden0,
                   additionalResiduals: additionalResiduals
@@ -306,7 +313,7 @@ public struct StableDiffusionPipeline: StableDiffusionPipelineProtocol {
                 var hidden1 = MLShapedArray<Float32>(converting: hiddenStates[1])
                 hidden1 = MLShapedArray(scalars: hidden1.scalars, shape: [1]+hidden1.shape)
                 let noise_pred_text = try unet.predictNoise(
-                  latents: latents,
+                  latents: latentModelInput,
                   timeStep: t,
                   hiddenStates: hidden1,
                   additionalResiduals: additionalResiduals
